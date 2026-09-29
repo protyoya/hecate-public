@@ -1,0 +1,82 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # pnpm version comes from "packageManager" in package.json; action-setup@v4
+      # errors if a `version` input is also given.
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - name: No known vulnerabilities in runtime dependencies
+        run: pnpm audit --prod
+      - run: pnpm build
+      - run: pnpm test
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - name: CLI smoke test
+        run: |
+          node packages/cli/dist/index.js scan fixtures/clean-weather-server.json
+          code=0
+          node packages/cli/dist/index.js scan fixtures/poisoned-trivia-server.json || code=$?
+          test "$code" -eq 1 # findings, not an input error (2)
+      - name: CLI pin/check smoke test
+        run: |
+          lock="$RUNNER_TEMP/hecate.lock.json"
+          node packages/cli/dist/index.js pin fixtures/clean-weather-server.json --lockfile "$lock"
+          node packages/cli/dist/index.js check fixtures/clean-weather-server.json --lockfile "$lock"
+          code=0
+          node packages/cli/dist/index.js check fixtures/rug-pulled-weather-server.json --lockfile "$lock" || code=$?
+          test "$code" -eq 1 # rug pull detected
+      - name: CLI lethal-trifecta smoke test
+        run: |
+          node packages/cli/dist/index.js scan fixtures/fetch-server.json
+          node packages/cli/dist/index.js scan fixtures/filesystem-server.json
+          code=0
+          node packages/cli/dist/index.js scan fixtures/fetch-server.json fixtures/filesystem-server.json || code=$?
+          test "$code" -eq 1 # the trifecta only exists across both servers
+          node packages/cli/dist/index.js graph fixtures/fetch-server.json fixtures/filesystem-server.json
+      - name: CLI tool-shadowing smoke test
+        run: |
+          node packages/cli/dist/index.js scan fixtures/shadowing-server.json
+          code=0
+          node packages/cli/dist/index.js scan fixtures/email-server.json fixtures/shadowing-server.json || code=$?
+          test "$code" -eq 1 # MCP003: the calculator BCCs every email
+      - name: CLI excessive-scope smoke test
+        run: |
+          code=0
+          node packages/cli/dist/index.js scan fixtures/shell-server.json fixtures/fetch-server.json --json > "$RUNNER_TEMP/scope.json" || code=$?
+          test "$code" -eq 1
+          node -e 'const f = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); if (!f.some((x) => x.ruleId === "MCP004" && x.severity === "critical")) process.exit(1)' "$RUNNER_TEMP/scope.json"
+          code=0
+          node packages/cli/dist/index.js scan fixtures/broad-scope-config.json || code=$?
+          test "$code" -eq 1 # filesystem server given "/"
+      - name: CLI supply-chain smoke test
+        run: |
+          code=0
+          node packages/cli/dist/index.js scan fixtures/supply-chain-config.json --json > "$RUNNER_TEMP/supply.json" || code=$?
+          test "$code" -eq 1
+          node -e 'const f = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); if (!f.some((x) => x.ruleId === "MCP007" && x.severity === "critical")) process.exit(1)' "$RUNNER_TEMP/supply.json"
+      - name: CLI client-config smoke test
+        run: |
+          node packages/cli/dist/index.js scan fixtures/agent-config.json # config checks only: clean
+          code=0
+          node packages/cli/dist/index.js scan fixtures/secrets-config.json || code=$?
+          test "$code" -eq 1 # MCP006: hard-coded AWS key, no --connect needed
+          code=0
+          node packages/cli/dist/index.js scan fixtures/agent-config.json --connect || code=$?
+          test "$code" -eq 1 # trifecta across the two fixture stdio servers
+      - name: CLI SARIF smoke test
+        run: |
+          code=0
+          node packages/cli/dist/index.js scan fixtures/poisoned-trivia-server.json --format sarif > "$RUNNER_TEMP/hecate.sarif" || code=$?
+          test "$code" -eq 1
+          node -e 'const log = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); if (log.version !== "2.1.0" || log.runs[0].results[0].ruleId !== "MCP001") process.exit(1)' "$RUNNER_TEMP/hecate.sarif"
+      - name: Package smoke test (installs the packed tarballs)
+        run: bash scripts/smoke-packages.sh

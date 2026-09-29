@@ -1,0 +1,48 @@
+name: release
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    # Add protection rules (e.g. required reviewers) to this environment in the
+    # repository settings; the npm trusted publishers are configured for it.
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write # npm trusted publishing (OIDC) and provenance
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+      - name: npm with trusted publishing support
+        run: npm install -g npm@^11.5.1
+      - run: pnpm install --frozen-lockfile
+      - name: No known vulnerabilities in runtime dependencies
+        run: pnpm audit --prod
+      - name: Tag matches the package versions
+        id: version
+        run: node scripts/check-release-version.mjs "$GITHUB_REF_NAME"
+      - run: pnpm build
+      - run: pnpm test
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: bash scripts/smoke-packages.sh
+      - name: Publish with provenance
+        env:
+          DIST_TAG: ${{ steps.version.outputs.dist_tag }} # "beta" for vX.Y.Z-beta.N
+        run: |
+          mkdir -p "$RUNNER_TEMP/publish"
+          (cd packages/cli && pnpm pack --pack-destination "$RUNNER_TEMP/publish")
+          (cd packages/sdk && pnpm pack --pack-destination "$RUNNER_TEMP/publish")
+          for tarball in "$RUNNER_TEMP"/publish/*.tgz; do
+            npm publish "$tarball" --provenance --access public --tag "$DIST_TAG"
+          done

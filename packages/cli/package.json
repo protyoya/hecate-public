@@ -1,0 +1,62 @@
+{
+  "name": "hecate-mcp",
+  "version": "0.1.0-beta.1",
+  "type": "module",
+  "license": "Apache-2.0",
+  "description": "Security scanner for MCP servers and the AI agents that use them: tool poisoning, rug pulls, the lethal trifecta, secrets, supply chain",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "security",
+    "scanner",
+    "ai-agents",
+    "llm",
+    "prompt-injection",
+    "tool-poisoning",
+    "sarif",
+    "mcp-server",
+    "mcp-security",
+    "ai-security",
+    "agent-security",
+    "supply-chain-security",
+    "claude",
+    "cursor"
+  ],
+  "homepage": "https://hecate.protyoya.tech",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/protyoya/hecate-public.git",
+    "directory": "packages/cli"
+  },
+  "bugs": {
+    "url": "https://github.com/protyoya/hecate-public/issues"
+  },
+  "bin": {
+    "hecate": "./dist/index.js"
+  },
+  "files": ["dist"],
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsx src/dev.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/client": "^2.2.0",
+    "commander": "^12.1.0",
+    "picocolors": "^1.1.0",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@hecate-mcp/core": "workspace:*",
+    "@types/node": "^20.16.0",
+    "tsup": "^8.3.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}

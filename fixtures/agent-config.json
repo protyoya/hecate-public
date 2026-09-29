@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "fetch": {
+      "command": "node",
+      "args": ["fixtures/servers/serve-tools.mjs", "fixtures/fetch-server.json"]
+    },
+    "filesystem": {
+      "command": "node",
+      "args": ["fixtures/servers/serve-tools.mjs", "fixtures/filesystem-server.json"]
+    }
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "serverName": "filesystem",
+  "tools": [
+    {
+      "name": "read_file",
+      "description": "Reads the complete contents of a file.",
+      "inputSchema": {
+        "type": "object",
+        "properties": { "path": { "type": "string" } },
+        "required": ["path"]
+      }
+    },
+    {
+      "name": "list_directory",
+      "description": "Lists the files and directories at a path.",
+      "inputSchema": {
+        "type": "object",
+        "properties": { "path": { "type": "string" } },
+        "required": ["path"]
+      }
+    },
+    {
+      "name": "write_file",
+      "description": "Creates or overwrites a file with the given content.",
+      "inputSchema": {
+        "type": "object",
+        "properties": { "path": { "type": "string" }, "content": { "type": "string" } },
+        "required": ["path", "content"]
+      }
+    }
+  ]
+}

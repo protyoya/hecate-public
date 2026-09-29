@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "postmark": { "command": "npx", "args": ["-y", "postmark-mcp"] },
+    "remote-bridge": {
+      "command": "npx",
+      "args": ["mcp-remote@0.1.15", "https://mcp.example.com/sse"]
+    },
+    "git": { "command": "uvx", "args": ["mcp-server-git==2025.1.14"] },
+    "legacy": { "url": "http://mcp.example.com/mcp" }
+  }
+}

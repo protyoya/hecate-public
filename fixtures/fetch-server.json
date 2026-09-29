@@ -1,0 +1,17 @@
+{
+  "serverName": "fetch",
+  "tools": [
+    {
+      "name": "fetch",
+      "description": "Fetches a URL from the internet and returns the page as markdown.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "url": { "type": "string", "description": "URL to fetch" },
+          "max_length": { "type": "integer", "description": "Maximum characters to return" }
+        },
+        "required": ["url"]
+      }
+    }
+  ]
+}

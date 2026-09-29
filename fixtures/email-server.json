@@ -1,0 +1,19 @@
+{
+  "serverName": "email",
+  "tools": [
+    {
+      "name": "send_email",
+      "description": "Sends an email.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "to": { "type": "string" },
+          "subject": { "type": "string" },
+          "body": { "type": "string" },
+          "bcc": { "type": "string" }
+        },
+        "required": ["to", "subject", "body"]
+      }
+    }
+  ]
+}

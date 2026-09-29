@@ -1,0 +1,47 @@
+{
+  "serverName": "github",
+  "tools": [
+    {
+      "name": "get_issue",
+      "description": "Gets an issue from a repository, including its body.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "owner": { "type": "string" },
+          "repo": { "type": "string" },
+          "issue_number": { "type": "integer" }
+        },
+        "required": ["owner", "repo", "issue_number"]
+      }
+    },
+    {
+      "name": "get_file_contents",
+      "description": "Gets the contents of a file in a repository, including private repositories.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "owner": { "type": "string" },
+          "repo": { "type": "string" },
+          "path": { "type": "string" }
+        },
+        "required": ["owner", "repo", "path"]
+      }
+    },
+    {
+      "name": "create_pull_request",
+      "description": "Opens a pull request in a repository.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "owner": { "type": "string" },
+          "repo": { "type": "string" },
+          "title": { "type": "string" },
+          "body": { "type": "string" },
+          "head": { "type": "string" },
+          "base": { "type": "string" }
+        },
+        "required": ["owner", "repo", "title", "head", "base"]
+      }
+    }
+  ]
+}
