@@ -143,6 +143,11 @@ await github.connect(transport); // listTools/callTool now go through the guard
 
 `approveExec` and `approveEgressAfterUntrusted` default to `true`.
 
+## Backers
+
+Thank you to **[Wonderful AI](https://www.wonderful.ai/)** for committing $4,500 to Hecate's development, after Hecate stopped
+a phishing attempt against their MCP setup.
+
 ## Packages
 
 | Package | npm | |
