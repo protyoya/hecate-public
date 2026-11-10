@@ -145,6 +145,13 @@ await github.connect(transport); // listTools/callTool now go through the guard
 
 ## Backers
 
+<a href="https://www.wonderful.ai/">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset=".github/assets/backers/wonderful-dark.svg">
+    <img alt="Wonderful AI" src=".github/assets/backers/wonderful-light.svg" height="40">
+  </picture>
+</a>
+
 Thank you to **[Wonderful AI](https://www.wonderful.ai/)** for committing $4,500 to Hecate's development, after Hecate stopped
 a phishing attempt against their MCP setup.
 
