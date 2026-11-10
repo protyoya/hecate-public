@@ -36,8 +36,11 @@ await web.connect(webTransport);
 
 For a single server, `guard(client, { server, ...options })` is shorthand. For
 frameworks that manage their own transports, `hecate.wrapTransport(transport,
-{ server })`. `server` names the server in policy patterns and the lockfile;
-without it, the name the server reports in `initialize` is used.
+{ server })`. `server` names the server in policy patterns and the lockfile.
+Without it, the name the server reports in `initialize` is used, but only when
+the policy and lockfile don't name servers: otherwise `connect()` fails, since a
+server could claim another's name and, with it, that server's exceptions, pins
+and allow rules.
 
 ## What it does
 
@@ -48,6 +51,8 @@ descriptions never reach it, and blocks calls to them:
   first `tools/list` of the session (rug pulls, trust on first use)
 - poisoned definitions, and definitions containing secrets
 - tools outside `guard.tools.allow`, or matching `guard.tools.deny`
+
+A listing that spans several pages (`nextCursor`) is vetted as one list.
 
 **On `tools/call`**, it blocks calls to tools it hasn't vetted and URLs to hosts
 outside `guard.egress.allow`, and asks your `approve` callback first for:
@@ -117,6 +122,11 @@ One JSON object per line, with `time` and `server` on each:
 - Untrusted content is tracked per session, not per value: after any untrusted
   read, every egress call needs approval until `clearTaint()`.
 - The audit log is a local file, not tamper-evident.
+- `guard.egress` sees URLs in any argument (any scheme, or `//host`) and bare
+  host names in URL-like fields (`url`, `host`, `endpoint`, `webhook`, ...). A
+  host spelled any other way (split across fields, encoded, an email recipient)
+  isn't seen: treat it as a tripwire, and put tools that send data out under
+  `guard.approve`.
 
 ## License
 

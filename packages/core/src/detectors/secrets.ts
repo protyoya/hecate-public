@@ -68,7 +68,9 @@ export const secretsExposure: Rule = {
     }
     for (const tool of surface.tools) {
       for (const [field, value] of strings(tool)) {
-        const secret = tokenIn(value);
+        // Descriptions document formats with examples ("hooks.slack.com/services/T000/B000/XXXX");
+        // a config value is always the real thing, so only here are examples let through.
+        const secret = tokenIn(value, { examples: true });
         if (!secret) continue;
         findings.push({
           ruleId: ID,
@@ -92,10 +94,14 @@ interface Secret {
   what: string;
 }
 
-function tokenIn(value: string): Secret | undefined {
+/** Documented example tokens: runs of X or 0, "EXAMPLE", "your", template placeholders. */
+const EXAMPLE_TOKEN = /x{4,}|0{4,}|(?:^|\/)[tb]0{3,}(?:\/|$)|example|your|\.{3}|<[^>]*>|\{[^}]*\}/i;
+
+function tokenIn(value: string, { examples = false } = {}): Secret | undefined {
   for (const { name, pattern } of TOKENS) {
     const match = pattern.exec(value);
-    if (match) return { severity: "high", what: `${name} (${match[0].length} characters)` };
+    if (match && !(examples && EXAMPLE_TOKEN.test(match[0])))
+      return { severity: "high", what: `${name} (${match[0].length} characters)` };
   }
   return undefined;
 }

@@ -15,7 +15,7 @@ Needs Node.js 20 or later. The installed command is `hecate`.
 
 | Rule | Finds |
 |---|---|
-| MCP001 | Tool poisoning: injected instructions, invisible Unicode or hidden HTML comments in tool descriptions |
+| MCP001 | Tool poisoning: injected instructions, secrecy, exfiltration, argument tampering, invisible Unicode or hidden comments in tool definitions, parameter descriptions included |
 | MCP002 | Rug pulls: tools that changed or appeared since you approved them (`hecate pin` / `hecate check`) |
 | MCP003 | Tool shadowing: a tool that tells the model how another server's tools should behave; one tool name on several servers |
 | MCP004 | Excessive scope: tools that run commands or code, file writes that untrusted content can steer, servers given `/` or a home directory |

@@ -93,7 +93,12 @@ interface Config {
   lockfile?: Lockfile;
 }
 
-const URL_IN_TEXT = /\bhttps?:\/\/[^\s"'<>]+/gi;
+/** scheme://host in any scheme (https, wss, ftp, ...), or //host at the start of a word. */
+const URL_IN_TEXT =
+  /\b[a-z][a-z0-9+.-]*:\/\/[^\s"'<>]+|(?<![^\s"'(=])\/\/[^\s"'<>/]+\.[^\s"'<>]+/gi;
+/** Argument names whose value is a host or URL even without a scheme, e.g. { webhook: "evil.com/x" }. */
+const URL_KEY = /url|uri|href|link|host|domain|endpoint|origin|webhook|callback|server/i;
+const BARE_HOST = /^[a-z0-9-]+(?:\.[a-z0-9-]+)+(?::\d+)?(?:[/?#].*)?$/i;
 
 /**
  * One guard per agent: servers wrapped by the same guard share state, so
@@ -116,8 +121,11 @@ export class GuardSession implements Guard {
   readonly mode: "enforce" | "monitor";
   #options: GuardOptions;
   #config?: Promise<Config>;
-  /** Trust on first use: first tools/list per server, for servers without pins. */
-  #baselines = new Map<string, Map<string, string>>();
+  /**
+   * Trust on first use, for servers without pins: the definitions from the first tools/list of
+   * the session, every page of it (`complete` once the last page is in).
+   */
+  #baselines = new Map<string, { hashes: Map<string, string>; complete: boolean }>();
   #servers = new Map<string, ServerState>();
   #taint?: { server: string; tool: string };
   #audit: AuditWriter;
@@ -157,8 +165,30 @@ export class GuardSession implements Guard {
     return this.#config;
   }
 
-  /** Vets a tools/list result: returns the tools the model may see. */
-  async vetTools(server: string, tools: unknown[]): Promise<unknown[]> {
+  /**
+   * Without `server`, a server is known by the name it gives itself in `initialize`. It could
+   * give another server's name, and with it that server's policy exceptions, capability
+   * corrections, allow rules and pins: so a policy or lockfile that names servers needs `server`.
+   */
+  async checkUnnamed(server: string | undefined): Promise<void> {
+    const config = await this.ready();
+    if (server === undefined && namesServers(config)) {
+      throw new Error(
+        "Hecate guard: pass { server } to wrap(): the policy or lockfile has rules for named " +
+          "servers, and a server's name for itself can't choose which rules apply to it.",
+      );
+    }
+  }
+
+  /**
+   * Vets a tools/list result: returns the tools the model may see. A listing can span pages:
+   * `continued` for a page fetched with a cursor, `more` when the server has another page.
+   */
+  async vetTools(
+    server: string,
+    tools: unknown[],
+    page: { continued?: boolean; more?: boolean } = {},
+  ): Promise<unknown[]> {
     const { policy, guard: rulesOf, lockfile } = await this.ready();
     const hidden = new Map<string, string[]>();
     const hide = (tool: string, reason: string) =>
@@ -180,13 +210,19 @@ export class GuardSession implements Guard {
       lockfile && Object.hasOwn(lockfile.servers, server)
         ? lockfile.servers[server].tools
         : undefined;
-    const baseline = pins ? new Map(Object.entries(pins)) : this.#baselines.get(server);
+    let first = this.#baselines.get(server);
+    // A new listing (no cursor) while the first was unfinished: the first one is what it got.
+    if (first && !first.complete && !page.continued) first.complete = true;
+    // Still collecting the first listing's pages: new tools join the baseline.
+    const collecting = !pins && !first?.complete;
+    const baseline = pins ? new Map(Object.entries(pins)) : first?.hashes;
     const hashes = new Map<string, string>();
     for (const tool of surface.tools) {
       const hash = await hashTool(tool);
       hashes.set(tool.name, hash);
       if (!baseline) continue;
       const approved = baseline.get(tool.name);
+      if (approved === undefined && collecting) continue;
       if (approved === undefined) {
         hide(
           tool.name,
@@ -198,7 +234,12 @@ export class GuardSession implements Guard {
         hide(tool.name, "definition changed since it was approved (possible rug pull)");
       }
     }
-    if (!baseline) this.#baselines.set(server, hashes);
+    if (collecting) {
+      first ??= { hashes: new Map(), complete: false };
+      for (const [name, hash] of hashes) if (!first.hashes.has(name)) first.hashes.set(name, hash);
+      first.complete = !page.more;
+      this.#baselines.set(server, first);
+    }
 
     // 2. Findings about the definitions themselves (MCP001 poisoning, MCP006 secrets).
     for (const finding of definitionFindings(surface, { policy })) {
@@ -221,7 +262,9 @@ export class GuardSession implements Guard {
     const graph = attackGraph([surface], policy.capabilities);
     const inLeg = (leg: keyof typeof graph, name: string) =>
       graph[leg].some((t) => t.toolName === name);
-    const visible = new Map<string, ToolInfo>();
+    // A later page adds to what the listing's earlier pages showed; a new listing starts over.
+    const prior = page.continued ? this.#servers.get(server) : undefined;
+    const visible = new Map<string, ToolInfo>(prior?.visible);
     for (const tool of surface.tools) {
       if (hidden.has(tool.name) && this.mode === "enforce") continue;
       visible.set(tool.name, {
@@ -230,7 +273,7 @@ export class GuardSession implements Guard {
         egress: inLeg("external-comms", tool.name),
       });
     }
-    this.#servers.set(server, { visible, hidden });
+    this.#servers.set(server, { visible, hidden: new Map([...(prior?.hidden ?? []), ...hidden]) });
     this.#report(
       server,
       tools.length,
@@ -356,19 +399,41 @@ async function json(source: unknown, what: string): Promise<unknown> {
   }
 }
 
-function urlHosts(value: unknown, hosts = new Set<string>()): string[] {
+/** Whether any rule in the policy or lockfile applies to servers by name (see checkUnnamed). */
+function namesServers({ policy, guard: rules, lockfile }: Config): boolean {
+  return (
+    Object.keys(lockfile?.servers ?? {}).length > 0 ||
+    policy.capabilities.length > 0 ||
+    policy.ignore.some((entry) => entry.server !== undefined || entry.tool !== undefined) ||
+    rules.tools.allow.length > 0 ||
+    rules.tools.deny.length > 0 ||
+    rules.approve.length > 0
+  );
+}
+
+/**
+ * The hosts a call's arguments point to: URLs anywhere in them, and bare host names in
+ * URL-like fields. Best effort: a host spelled any other way (split across fields, encoded,
+ * an email address) isn't seen; see the README's limits.
+ */
+function urlHosts(value: unknown, key = "", hosts = new Set<string>()): string[] {
   if (typeof value === "string") {
-    for (const text of value.match(URL_IN_TEXT) ?? []) {
+    const found: string[] = [...(value.match(URL_IN_TEXT) ?? [])];
+    if (found.length === 0 && URL_KEY.test(key) && BARE_HOST.test(value.trim())) {
+      found.push(`//${value.trim()}`);
+    }
+    for (const text of found) {
       try {
-        hosts.add(new URL(text).hostname.toLowerCase());
+        const host = new URL(text.startsWith("//") ? `https:${text}` : text).hostname;
+        if (host) hosts.add(host.toLowerCase());
       } catch {
         // not a URL after all
       }
     }
   } else if (Array.isArray(value)) {
-    for (const item of value) urlHosts(item, hosts);
+    for (const item of value) urlHosts(item, key, hosts);
   } else if (value !== null && typeof value === "object") {
-    for (const item of Object.values(value)) urlHosts(item, hosts);
+    for (const [name, item] of Object.entries(value)) urlHosts(item, name, hosts);
   }
   return [...hosts];
 }

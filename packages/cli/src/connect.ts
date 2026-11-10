@@ -1,5 +1,5 @@
 import type { MCPServerSurface, MCPTool, ServerLaunch } from "@hecate-mcp/core";
-import { surfaceFromToolsJson } from "@hecate-mcp/core";
+import { printable, surfaceFromToolsJson } from "@hecate-mcp/core";
 import {
   Client,
   SSEClientTransport,
@@ -19,6 +19,11 @@ const RawToolsPage = z.looseObject({
 });
 
 const STDERR_TAIL = 2000;
+/**
+ * A server that keeps answering with a new (or the same) nextCursor would hang the scan and grow
+ * its memory; real servers need a handful of pages.
+ */
+const MAX_PAGES = 100;
 
 /** Starts or connects to the server, lists every tool (all pages), and disconnects. */
 export async function listTools(surface: MCPServerSurface, timeoutMs: number): Promise<MCPTool[]> {
@@ -61,8 +66,12 @@ async function listToolsOver(
   try {
     await client.connect(transport, { timeout: timeoutMs });
     const tools: unknown[] = [];
+    const cursors = new Set<string>();
     let cursor: string | undefined;
     do {
+      if (cursors.size >= MAX_PAGES) {
+        throw new Error(`tools/list did not finish within ${MAX_PAGES} pages`);
+      }
       const page = await client.request(
         { method: "tools/list", params: cursor ? { cursor } : {} },
         RawToolsPage,
@@ -70,13 +79,22 @@ async function listToolsOver(
       );
       tools.push(...page.tools);
       cursor = page.nextCursor;
+      if (cursor !== undefined) {
+        if (cursors.has(cursor)) throw new Error("tools/list repeated a page cursor");
+        cursors.add(cursor);
+      }
     } while (cursor);
     return surfaceFromToolsJson({ tools }, surface.source).tools;
   } catch (err) {
-    const tail = stderr.trim()
-      ? `\n    server stderr: ${stderr.trim().split("\n").slice(-3).join("\n    ")}`
-      : "";
-    throw new Error(`${(err as Error).message}${tail}`);
+    // The server writes its stderr and much of the error text: escape both, then add our own
+    // line breaks (index.ts prints the message with those kept).
+    const lines = stderr
+      .trim()
+      .split(/\r?\n/)
+      .slice(-3)
+      .map((line) => printable(line));
+    const tail = stderr.trim() ? `\n    server stderr: ${lines.join("\n    ")}` : "";
+    throw new Error(`${printable((err as Error).message)}${tail}`);
   } finally {
     await client.close().catch(() => {});
   }

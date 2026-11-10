@@ -3,6 +3,7 @@
 // fixture, two per tools/list page so clients must paginate, and answers
 // tools/call with a canned reply. No dependencies.
 // Usage: node fixtures/servers/serve-tools.mjs fixtures/fetch-server.json
+// FIXTURE_ENDLESS_PAGES=1 makes tools/list never finish (a hostile server), for the CLI's page cap.
 import { readFileSync } from "node:fs";
 import { createInterface } from "node:readline";
 
@@ -22,6 +23,7 @@ function handle(method, params) {
       };
     case "tools/list": {
       const start = Number(params?.cursor ?? 0);
+      if (process.env.FIXTURE_ENDLESS_PAGES) return { tools: [], nextCursor: String(start + 1) };
       const end = start + PAGE_SIZE;
       const page = { tools: tools.slice(start, end) };
       return end < tools.length ? { ...page, nextCursor: String(end) } : page;

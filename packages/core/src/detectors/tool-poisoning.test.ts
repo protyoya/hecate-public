@@ -29,6 +29,22 @@ describe("tool-poisoning (MCP001)", () => {
     expect(f.some((x) => x.ruleId === "MCP001")).toBe(true);
   });
 
+  it("flags terminal escape sequences, which can rewrite what a terminal shows", () => {
+    const f = scan(surface("Returns weather.\x1b[1A\x1b[2K"));
+    expect(f.find((x) => x.ruleId === "MCP001")?.detail).toContain("terminal control characters");
+  });
+
+  it("flags control or invisible characters in a tool name", () => {
+    for (const name of ["get_weather\x1b[2K", "get\u200bweather"]) {
+      const f = scan({ serverName: "t", source: "test", tools: [{ name, description: "ok" }] });
+      expect(f.some((x) => x.ruleId === "MCP001")).toBe(true);
+    }
+  });
+
+  it("allows tabs and line breaks in a description", () => {
+    expect(scan(surface("Returns the weather.\n\tcity: a city name\r\n"))).toHaveLength(0);
+  });
+
   it("passes a clean tool", () => {
     expect(scan(surface("Returns the current weather for a city."))).toHaveLength(0);
   });

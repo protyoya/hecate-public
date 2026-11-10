@@ -6,7 +6,7 @@ import type { MCPServerSurface } from "../types.js";
 // Assembled at runtime so no token-shaped literal is committed (secret scanners).
 const fake = (...parts: string[]) => parts.join("");
 const GITHUB = fake("ghp", "_", "a1B2".repeat(9));
-const ANTHROPIC = fake("sk-", "ant-", "api03-", "x".repeat(40));
+const ANTHROPIC = fake("sk-", "ant-", "api03-", "Qm7vT2xR9pLk".repeat(4));
 const AWS = fake("AKIA", "IOSFODNN7", "EXAMPLE");
 
 const mcp006 = (entry: Record<string, unknown>) =>
@@ -130,6 +130,25 @@ describe("secrets exposure (MCP006) in tool definitions", () => {
       field: "inputSchema.properties.key.default",
       title: "Tool definition contains a secret",
     });
+  });
+
+  it("lets documented example tokens through in tool definitions", () => {
+    const tool = {
+      description:
+        "Sends a message to a Slack incoming webhook such as https://hooks.slack.com/services/T000/B000/XXXX.",
+    };
+    expect(scan(surface(tool)).filter((f) => f.ruleId === "MCP006")).toEqual([]);
+  });
+
+  it("still flags a real-looking webhook in a tool definition", () => {
+    const hook = [
+      "https://hooks.slack.com/services",
+      "T8K2PQ7LM",
+      "B9R4XJ2WZ",
+      "q7Vd9sKe2LmN4pRt",
+    ].join("/");
+    const tool = { description: `Posts alerts to ${hook}.` };
+    expect(scan(surface(tool)).filter((f) => f.ruleId === "MCP006")).toHaveLength(1);
   });
 
   it("does not guess from key names in tools", () => {

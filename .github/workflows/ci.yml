@@ -44,10 +44,16 @@ jobs:
           node packages/cli/dist/index.js graph fixtures/fetch-server.json fixtures/filesystem-server.json
       - name: CLI tool-shadowing smoke test
         run: |
-          node packages/cli/dist/index.js scan fixtures/shadowing-server.json
+          # Alone, the calculator's BCC instruction is still tool poisoning (MCP001), but there is
+          # no other server to shadow: no MCP003.
           code=0
-          node packages/cli/dist/index.js scan fixtures/email-server.json fixtures/shadowing-server.json || code=$?
-          test "$code" -eq 1 # MCP003: the calculator BCCs every email
+          node packages/cli/dist/index.js scan fixtures/shadowing-server.json --json > "$RUNNER_TEMP/alone.json" || code=$?
+          test "$code" -eq 1
+          node -e 'const f = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); if (!f.some((x) => x.ruleId === "MCP001") || f.some((x) => x.ruleId === "MCP003")) process.exit(1)' "$RUNNER_TEMP/alone.json"
+          code=0
+          node packages/cli/dist/index.js scan fixtures/email-server.json fixtures/shadowing-server.json --json > "$RUNNER_TEMP/both.json" || code=$?
+          test "$code" -eq 1
+          node -e 'const f = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); if (!f.some((x) => x.ruleId === "MCP003")) process.exit(1)' "$RUNNER_TEMP/both.json" # the calculator BCCs every email
       - name: CLI excessive-scope smoke test
         run: |
           code=0
@@ -72,6 +78,19 @@ jobs:
           code=0
           node packages/cli/dist/index.js scan fixtures/agent-config.json --connect || code=$?
           test "$code" -eq 1 # trifecta across the two fixture stdio servers
+      - name: CLI hostile-server smoke test
+        run: |
+          # A tool name full of terminal escapes: flagged (MCP001), and printed inert.
+          code=0
+          NO_COLOR=1 node packages/cli/dist/index.js scan fixtures/terminal-escape-server.json > "$RUNNER_TEMP/escape.txt" || code=$?
+          test "$code" -eq 1
+          if grep -q $'\x1b' "$RUNNER_TEMP/escape.txt"; then echo "raw escape reached the terminal" >&2; exit 1; fi
+          grep -q 'MCP001' "$RUNNER_TEMP/escape.txt"
+          # tools/list that never ends: the scan stops with an input error instead of hanging.
+          code=0
+          node packages/cli/dist/index.js scan fixtures/endless-pages-config.json --connect 2> "$RUNNER_TEMP/endless.txt" || code=$?
+          test "$code" -eq 2
+          grep -q 'did not finish within' "$RUNNER_TEMP/endless.txt"
       - name: CLI SARIF smoke test
         run: |
           code=0

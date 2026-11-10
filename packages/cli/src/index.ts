@@ -17,6 +17,7 @@ import {
   parseLockfile,
   parsePolicy,
   pinSurface,
+  printable,
   scan,
   surfacesFromJson,
   toSarif,
@@ -136,10 +137,12 @@ withConnect(program.command("pin"))
       try {
         pins = await pinSurface(surface);
       } catch (err) {
-        throw new InputError((err as Error).message);
+        throw new InputError(printable((err as Error).message));
       }
       lock = updateLockfile(lock, surface.serverName, pins);
-      pinned.push(`${Object.keys(pins.tools).length} tool(s) for "${surface.serverName}"`);
+      pinned.push(
+        `${Object.keys(pins.tools).length} tool(s) for "${printable(surface.serverName)}"`,
+      );
     }
     writeFileSync(opts.lockfile, `${JSON.stringify(lock, null, 2)}\n`);
     console.log(pc.green(`✔ Pinned ${pinned.join(", ")} in ${opts.lockfile}.`));
@@ -198,7 +201,9 @@ program.parseAsync().catch((err: unknown) => {
     return;
   }
   if (!(err instanceof InputError)) throw err;
-  console.error(pc.red(err.message));
+  // The parts that come from scanned files and servers are escaped where the message is built;
+  // this keeps any that slipped through from acting on the terminal.
+  console.error(pc.red(printable(err.message, { newlines: true })));
   process.exitCode = 2;
 });
 
@@ -206,7 +211,8 @@ function readSurfaces(file: string): MCPServerSurface[] {
   try {
     return surfacesFromJson(JSON.parse(readFileSync(file, "utf8")), file);
   } catch (err) {
-    throw new InputError(`Could not read ${file}: ${(err as Error).message}`);
+    // JSON.parse quotes the file in its errors, and the parser quotes tool names.
+    throw new InputError(`Could not read ${file}: ${printable((err as Error).message)}`);
   }
 }
 
@@ -222,7 +228,7 @@ async function connect(
 ): Promise<MCPServerSurface[]> {
   const configured = surfaces.filter((s) => s.launch);
   if (configured.length === 0) return surfaces;
-  const names = configured.map((s) => s.serverName).join(", ");
+  const names = configured.map((s) => printable(s.serverName)).join(", ");
   if (!opts.connect) {
     if (opts.configOnly) {
       console.error(
@@ -241,7 +247,8 @@ async function connect(
   const results = await Promise.allSettled(configured.map((s) => listTools(s, opts.timeout)));
   const failures = results.flatMap((result, i) =>
     result.status === "rejected"
-      ? [`  ${configured[i].serverName}: ${(result.reason as Error).message}`]
+      ? // connect.ts escapes the server's own text (errors, stderr) and adds the line breaks
+        [`  ${printable(configured[i].serverName)}: ${(result.reason as Error).message}`]
       : [],
   );
   if (failures.length > 0) {
@@ -294,7 +301,7 @@ function readLockfile(path: string): Lockfile | undefined {
   try {
     return parseLockfile(JSON.parse(readFileSync(path, "utf8")));
   } catch (err) {
-    throw new InputError(`Could not read lockfile ${path}: ${(err as Error).message}`);
+    throw new InputError(`Could not read lockfile ${path}: ${printable((err as Error).message)}`);
   }
 }
 
@@ -306,10 +313,10 @@ function readPolicy(path: string | undefined): Policy {
   try {
     policy = parsePolicy(JSON.parse(readFileSync(file, "utf8")));
   } catch (err) {
-    throw new InputError(`Could not read policy ${file}: ${(err as Error).message}`);
+    throw new InputError(`Could not read policy ${file}: ${printable((err as Error).message)}`);
   }
   for (const entry of expiredIgnores(policy)) {
-    const scope = [entry.rule, entry.server, entry.tool].filter(Boolean).join(" ");
+    const scope = printable([entry.rule, entry.server, entry.tool].filter(Boolean).join(" "));
     console.error(
       pc.yellow(
         `warning: ${file}: ignore for ${scope} expired on ${entry.expires}; it no longer applies.`,
@@ -353,35 +360,39 @@ function printReport(findings: Finding[]): void {
     for (const f of suppressed) {
       const at = where(f) ? ` ${where(f)}` : "";
       const until = f.suppressed?.expires ? ` (until ${f.suppressed.expires})` : "";
-      console.log(pc.dim(`  ${f.ruleId}${at}: ${f.suppressed?.reason}${until}`));
+      console.log(pc.dim(`  ${f.ruleId}${at}: ${printable(f.suppressed?.reason ?? "")}${until}`));
     }
   }
 }
 
+/**
+ * Findings quote tool names, server names and descriptions from the scanned servers: every value
+ * goes through printable(), so a hostile server can't rewrite the report (see core text.ts).
+ */
 function printFindings(findings: Finding[]): void {
   const color = (s: Finding["severity"]) =>
     s === "critical" || s === "high" ? pc.red : s === "medium" ? pc.yellow : pc.dim;
   console.log(pc.bold(`\nFound ${findings.length} issue(s):\n`));
   for (const f of findings) {
     console.log(
-      `${color(f.severity)(`[${f.severity.toUpperCase()}]`)} ${pc.bold(f.ruleId)} ${f.title}`,
+      `${color(f.severity)(`[${f.severity.toUpperCase()}]`)} ${pc.bold(f.ruleId)} ${printable(f.title)}`,
     );
     if (where(f)) console.log(`  at: ${where(f)}`);
-    console.log(`  ${f.detail}`);
+    console.log(`  ${printable(f.detail)}`);
     if (f.attackGraph) printAttackPath(f.attackGraph);
-    console.log(`  ${pc.cyan("fix:")} ${f.remediation}\n`);
+    console.log(`  ${pc.cyan("fix:")} ${printable(f.remediation)}\n`);
   }
 }
 
 /** "server/tool", or "server", then the field if any: "github › env.GITHUB_TOKEN". */
 function where(f: Finding): string {
   const subject = f.toolName ? `${f.serverName ?? "?"}/${f.toolName}` : f.serverName;
-  return [subject, f.field].filter(Boolean).join(" › ");
+  return printable([subject, f.field].filter(Boolean).join(" › "));
 }
 
 function printAttackPath(graph: NonNullable<Finding["attackGraph"]>): void {
   for (const [i, capability] of CAPABILITIES.entries()) {
-    const tools = graph[capability].map((t) => `${t.serverName}/${t.toolName}`);
+    const tools = graph[capability].map((t) => printable(`${t.serverName}/${t.toolName}`));
     const shown = tools.length > 4 ? [...tools.slice(0, 3), `+${tools.length - 3} more`] : tools;
     console.log(`  ${i + 1}. ${CAPABILITY_LABELS[capability].padEnd(23)} ${shown.join(", ")}`);
   }

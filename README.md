@@ -22,7 +22,7 @@ npx hecate-mcp@beta check tools.json           # fail if a tool changed or appea
 
 | Rule | Finds |
 |---|---|
-| MCP001 | **Tool poisoning:** hidden or injected instructions in a tool description |
+| MCP001 | **Tool poisoning:** hidden or injected instructions in a tool description, title or parameter description |
 | MCP002 | **Rug pull:** a tool changed, appeared or disappeared after you pinned it |
 | MCP003 | **Tool shadowing:** a tool tells the model how another server's tools should behave |
 | MCP004 | **Excessive scope:** command execution, file writes, the whole filesystem |
@@ -163,4 +163,4 @@ a phishing attempt against their MCP setup.
 | [`packages/sdk`](packages/sdk) | [`@hecate-mcp/sdk`](https://www.npmjs.com/package/@hecate-mcp/sdk) | The runtime guard |
 | [`packages/core`](packages/core) | bundled into both | Detection engine: pure, browser-safe |
 
-Apache-2.0. For teams: [Hecate Cloud](https://hecate.protyoya.tech), now taking waitlist signups.
+Apache-2.0. Guides: [MCP security](https://hecate.protyoya.tech/mcp-security), [tool poisoning](https://hecate.protyoya.tech/mcp-tool-poisoning), [rug pulls](https://hecate.protyoya.tech/mcp-rug-pull), [the lethal trifecta](https://hecate.protyoya.tech/lethal-trifecta), [OWASP MCP Top 10](https://hecate.protyoya.tech/owasp-mcp-top-10). For teams: [Hecate Cloud](https://hecate.protyoya.tech), now taking waitlist signups.

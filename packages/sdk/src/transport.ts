@@ -30,7 +30,8 @@ export class GuardedTransport implements Transport {
   #session: GuardSession;
   #server?: string;
   #initialize?: RequestId;
-  #lists = new Set<RequestId>();
+  /** Pending tools/list requests, and whether each asked for a later page (had a cursor). */
+  #lists = new Map<RequestId, boolean>();
   #calls = new Map<RequestId, { tool: string; started: number }>();
   /** Incoming messages are processed in order, even when vetting is async. */
   #queue: Promise<void> = Promise.resolve();
@@ -50,7 +51,8 @@ export class GuardedTransport implements Transport {
   }
 
   async start(): Promise<void> {
-    await this.#session.ready(); // an unreadable policy or lockfile fails connect()
+    // An unreadable policy or lockfile fails connect(), and so does a missing name it needs.
+    await this.#session.checkUnnamed(this.#server);
     this.#inner.onmessage = (message, extra) => this.#enqueue(() => this.#receive(message, extra));
     this.#inner.onclose = () => this.onclose?.();
     this.#inner.onerror = (error) => this.onerror?.(error);
@@ -64,7 +66,9 @@ export class GuardedTransport implements Transport {
   async send(message: JSONRPCMessage, options?: TransportSendOptions): Promise<void> {
     const m = message as Message;
     if (m.id !== undefined && m.method === "initialize") this.#initialize = m.id;
-    if (m.id !== undefined && m.method === "tools/list") this.#lists.add(m.id);
+    if (m.id !== undefined && m.method === "tools/list") {
+      this.#lists.set(m.id, m.params?.cursor !== undefined);
+    }
     if (m.id !== undefined && m.method === "tools/call") {
       const id = m.id;
       const tool = String(m.params?.name ?? "");
@@ -97,8 +101,10 @@ export class GuardedTransport implements Transport {
         const info = m.result?.serverInfo as { name?: unknown } | undefined;
         if (typeof info?.name === "string") this.#server = info.name;
       }
+      const continued = this.#lists.get(id);
       if (this.#lists.delete(id) && Array.isArray(m.result?.tools)) {
-        const tools = await this.#session.vetTools(this.#name, m.result.tools);
+        const more = typeof m.result.nextCursor === "string";
+        const tools = await this.#session.vetTools(this.#name, m.result.tools, { continued, more });
         m = { ...m, result: { ...m.result, tools } } as Message;
       }
       const call = this.#calls.get(id);

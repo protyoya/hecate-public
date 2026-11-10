@@ -1,5 +1,7 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": { "lib": ["ES2022", "DOM", "DOM.Iterable"], "types": [] },
-  "include": ["src"]
+  "include": ["src"],
+  // Evaluations read benchmark data from disk (Node); core itself stays free of Node APIs.
+  "exclude": ["src/**/*.eval.test.ts"]
 }

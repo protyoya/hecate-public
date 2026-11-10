@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "endless": {
+      "command": "node",
+      "args": ["fixtures/servers/serve-tools.mjs", "fixtures/clean-weather-server.json"],
+      "env": {
+        "FIXTURE_ENDLESS_PAGES": "1"
+      }
+    }
+  }
+}

@@ -21,6 +21,7 @@ export { classifyScope, type Scope } from "./scope.js";
 export { type PackageRef, launchPackage } from "./packages.js";
 export { KNOWN_BAD, type KnownBadPackage } from "./known-bad.js";
 export { attackGraphToMermaid } from "./mermaid.js";
+export { printable } from "./text.js";
 export { toSarif, type SarifLocation, type SarifLog, type SarifOptions } from "./sarif.js";
 
 export interface ScanOptions {
