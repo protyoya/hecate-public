@@ -1,4 +1,5 @@
 // Writes every SVG in brand/. Run: node brand/scripts/build.mjs
+import { WONDERFUL } from "./backers.mjs";
 import { C, THRESHOLD, THRESHOLD_PAPER, f, save, svg } from "./lib.mjs";
 import * as M from "./mark.mjs";
 import { word } from "./wordmark.mjs";
@@ -112,11 +113,18 @@ function banner(dark) {
   const lockup = dark ? horizontal(markDark(), C.moonHi) : horizontal(markLight(), C.obsidian);
   const serif = "'Instrument Serif', 'Iowan Old Style', Georgia, serif";
   const mono = "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace";
+  const backer = placed(
+    `<g fill="${ink}">${WONDERFUL.paths.map((d) => `<path d="${d}"/>`).join("")}</g>`,
+    808,
+    296,
+    22 / WONDERFUL.h,
+  );
   const text =
     `<text x="714" y="152" font-family="${serif}" font-size="34" fill="${ink}">Security scanner and runtime guard</text>` +
     `<text x="714" y="192" font-family="${serif}" font-size="34" fill="${ink}">for MCP servers and AI agents.</text>` +
     `<rect x="714" y="218" width="336" height="42" rx="10" fill="${dark ? C.graphite : "#ECEAE4"}" stroke="${dark ? "#FFFFFF" : C.obsidian}" stroke-opacity="${dark ? 0.08 : 0.06}"/>` +
-    `<text x="728" y="245" font-family="${mono}" font-size="15" fill="${dark ? C.moonHi : C.graphite}">npx hecate-mcp@beta scan .mcp.json</text>`;
+    `<text x="728" y="245" font-family="${mono}" font-size="15" fill="${dark ? C.moonHi : C.graphite}">npx hecate-mcp@beta scan .mcp.json</text>` +
+    `<text x="714" y="312" font-family="${mono}" font-size="12" letter-spacing="1.8" fill="${ink}" fill-opacity="0.55">BACKED BY</text>${backer}`;
   return box(
     "0 0 1280 400",
     1280,
